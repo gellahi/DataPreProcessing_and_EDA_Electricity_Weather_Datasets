@@ -35,6 +35,18 @@ def prepare_df_for_display(df):
 
 merged_df = load_data()
 
+# Create sidebar navigation instead of tabs
+st.sidebar.title("Navigation")
+
+# Navigation options in the sidebar
+selected_page = st.sidebar.radio(
+    "",
+    ["📊 Data Overview", "📈 EDA", "🔍 Outlier Analysis", "🤖 Model Performance", "🔮 Forecasting"]
+)
+
+# Add separator between navigation and filters
+st.sidebar.markdown("---")
+
 # Sidebar for filters
 st.sidebar.header("Data Filters")
 
@@ -59,11 +71,8 @@ if 'weather_condition' in merged_df.columns:
 # Main title
 st.title('Electricity Demand Forecasting Dashboard')
 
-# Create tabs for better organization
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Data Overview", "📈 EDA", "🔍 Outlier Analysis", "🤖 Model Performance", "🔮 Forecasting"])
-
-# Tab 1: Data Overview
-with tab1:
+# Main content based on sidebar selection
+if selected_page == "📊 Data Overview":
     st.header("Data Summary")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -87,8 +96,7 @@ with tab1:
     missing_data['Missing Percentage'] = (missing_data['Missing Count'] / len(filtered_df)) * 100
     st.dataframe(missing_data)
 
-# Tab 2: EDA with Advanced Features
-with tab2:
+elif selected_page == "📈 EDA":
     st.header("Exploratory Data Analysis")
     
     # Initialize the EDA analyzer
@@ -258,10 +266,9 @@ with tab2:
             fig, corr = analyzer.analyze_weather_impact()
             st.write(f"Correlation between temperature and demand: {corr:.4f}")
             st.pyplot(fig)
-            
-            
-# Tab 3: Enhanced Outlier Analysis
-with tab3:
+     
+
+elif selected_page == "🔍 Outlier Analysis":
     st.header("Outlier Analysis")
     
     # Initialize the outlier detector
@@ -432,10 +439,9 @@ with tab3:
                 st.error(f"Error handling outliers: {e}")
     else:
         st.info("Run outlier detection first using one of the methods above.")
-        
-        
-# Tab 4: Model Performance
-with tab4:
+   
+
+elif selected_page == "🤖 Model Performance":
     st.header("Regression Model Performance")
     
     # Model selection and configuration
@@ -581,8 +587,9 @@ with tab4:
                 st.error(f"Error comparing models: {e}")
     else:
         st.info("Click 'Compare Different Models' to train and compare multiple regression models.")
-# Tab 5: Forecasting
-with tab5:
+        
+        
+elif selected_page == "🔮 Forecasting":
     st.header("Electricity Demand Forecasting")
     
     # Initialize forecaster
@@ -791,6 +798,7 @@ with tab5:
         - **Low**: Simulates a cooler than normal scenario.
         - **Custom**: Allows you to manually set temperature parameters.
         """)        
+    
         
 # Footer with additional information
 st.markdown("---")
