@@ -1,0 +1,24 @@
+[project]
+name = "datapreprocessing-eda-modeling"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "gellahi",email = "gellahi.dev@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pandas (>=2.2.3,<3.0.0)",
+    "numpy (>=2.2.3,<3.0.0)",
+    "matplotlib (>=3.10.1,<4.0.0)",
+    "seaborn (>=0.13.2,<0.14.0)",
+    "scikit-learn (>=1.6.1,<2.0.0)",
+    "streamlit (>=1.42.2,<2.0.0)",
+    "statsmodels (>=0.14.4,<0.15.0)",
+    "holidays (>=0.67,<0.68)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
