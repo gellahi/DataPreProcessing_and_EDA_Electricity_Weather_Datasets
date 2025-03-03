@@ -1,4 +1,3 @@
-from modeling import build_model, compare_models, plot_feature_importance, save_model
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -8,8 +7,11 @@ from datetime import datetime
 from modeling import build_model
 from statsmodels.tsa.seasonal import seasonal_decompose
 from sklearn.preprocessing import StandardScaler
+from modeling import build_model, compare_models, plot_feature_importance, save_model
 from eda import ElectricityDataAnalyzer, run_eda
 from outlier_handling import OutlierDetector, detect_and_handle_outliers
+from forecasting import ElectricityDemandForecaster, create_forecast_scenario, compare_forecast_scenarios
+
 
 
 # Page configuration
@@ -58,7 +60,7 @@ if 'weather_condition' in merged_df.columns:
 st.title('Electricity Demand Forecasting Dashboard')
 
 # Create tabs for better organization
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Data Overview", "📈 EDA", "🔍 Outlier Analysis", "🤖 Model Performance"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Data Overview", "📈 EDA", "🔍 Outlier Analysis", "🤖 Model Performance", "🔮 Forecasting"])
 
 # Tab 1: Data Overview
 with tab1:
@@ -579,7 +581,216 @@ with tab4:
                 st.error(f"Error comparing models: {e}")
     else:
         st.info("Click 'Compare Different Models' to train and compare multiple regression models.")
+# Tab 5: Forecasting
+with tab5:
+    st.header("Electricity Demand Forecasting")
+    
+    # Initialize forecaster
+    forecaster = ElectricityDemandForecaster()
+    
+    st.subheader("Forecast Configuration")
+    
+    # Select forecasting method
+    forecast_method = st.radio(
+        "Select Forecasting Method",
+        options=["Statistical (Prophet)", "Machine Learning"],
+        horizontal=True,
+        key="forecast_method"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Forecast horizon
+        horizon = st.slider("Forecast Horizon (hours)", 
+                          min_value=24, max_value=168, value=48, step=24,
+                          key="forecast_horizon")
         
+        # Start date for forecast
+        last_date = filtered_df['timestamp'].max()
+        forecast_start = st.date_input("Forecast Start Date", 
+                                     value=last_date.date(), 
+                                     min_value=last_date.date(),
+                                     key="forecast_start_date")
+    
+    with col2:
+        if forecast_method == "Statistical (Prophet)":
+            # Prophet-specific settings
+            yearly_seasonality = st.checkbox("Yearly Seasonality", value=True, key="prophet_yearly")
+            weekly_seasonality = st.checkbox("Weekly Seasonality", value=True, key="prophet_weekly")
+            daily_seasonality = st.checkbox("Daily Seasonality", value=True, key="prophet_daily")
+        
+        else:  # Machine Learning
+            # ML model selection
+            ml_model_type = st.selectbox(
+                "Select ML Model",
+                options=["rf", "gb", "linear", "ridge", "lasso"],
+                format_func=lambda x: {
+                    "rf": "Random Forest",
+                    "gb": "Gradient Boosting",
+                    "linear": "Linear Regression",
+                    "ridge": "Ridge Regression",
+                    "lasso": "Lasso Regression"
+                }.get(x, x),
+                key="ml_model_type"
+            )
+    
+    # Temperature scenario
+    st.subheader("Temperature Scenario")
+    temp_scenario = st.selectbox(
+        "Select Temperature Scenario",
+        options=["Normal", "High", "Low", "Custom"],
+        key="temp_scenario"
+    )
+    
+    if temp_scenario == "Custom":
+        base_temp = st.slider("Base Temperature (°C)", 
+                            min_value=0, max_value=30, value=20, step=1,
+                            key="base_temp")
+        temp_variation = st.slider("Day/Night Variation (±°C)", 
+                                 min_value=0, max_value=10, value=5, step=1,
+                                 key="temp_variation")
+    
+    # Generate forecast
+    if st.button("Generate Forecast", key="generate_forecast_btn"):
+        with st.spinner("Training model and generating forecast..."):
+            try:
+                # Create forecast start datetime
+                forecast_start_dt = pd.Timestamp(forecast_start)
+                
+                # Create future features dataframe
+                if temp_scenario == "Normal":
+                    # Use average temperatures from historical data for same time of year
+                    temperature_pattern = None  # Will use default pattern
+                elif temp_scenario == "High":
+                    temperature_pattern = None  # Will use default pattern + 5
+                    base_temp = 25
+                    temp_variation = 5
+                elif temp_scenario == "Low":
+                    temperature_pattern = None  # Will use default pattern - 5
+                    base_temp = 15
+                    temp_variation = 5
+                else:  # Custom
+                    temperature_pattern = None  # Will use provided base_temp and temp_variation
+                
+                future_df = forecaster.generate_future_features(
+                    start_date=forecast_start_dt,
+                    periods=horizon,
+                    freq='H',
+                    temperature_pattern=temperature_pattern
+                )
+                
+                # If custom or special scenarios, adjust temperature
+                if temp_scenario != "Normal":
+                    # Simple temperature pattern: base + variation * sin(hour)
+                    future_df['temperature'] = base_temp + temp_variation * np.sin(future_df['hour'] * np.pi / 12)
+                
+                # Fit model and generate forecast
+                if forecast_method == "Statistical (Prophet)":
+                    # Prepare Prophet training data
+                    train_df = filtered_df.copy()
+                    
+                    # Fit Prophet model
+                    forecaster.fit_prophet_model(
+                        train_df,
+                        yearly_seasonality=yearly_seasonality,
+                        weekly_seasonality=weekly_seasonality,
+                        daily_seasonality=daily_seasonality
+                    )
+                    
+                    # Generate forecast
+                    forecast = forecaster.forecast_with_prophet(
+                        periods=horizon,
+                        future_df=future_df
+                    )
+                    
+                    # Show forecast plot with components
+                    st.subheader("Forecast Results")
+                    fig, components_fig = forecaster.plot_forecast(
+                        forecast_df=forecast,
+                        historical_df=filtered_df,
+                        plot_components=True
+                    )
+                    st.pyplot(fig)
+                    
+                    # Show components
+                    st.subheader("Forecast Components")
+                    st.pyplot(components_fig)
+                    
+                else:  # Machine Learning
+                    # Fit ML model
+                    forecaster.fit_ml_model(filtered_df, model_type=ml_model_type)
+                    
+                    # Generate forecast
+                    forecast = forecaster.forecast_with_ml_model(future_df)
+                    
+                    # Show forecast plot
+                    st.subheader("Forecast Results")
+                    fig = forecaster.plot_forecast(
+                        forecast_df=forecast,
+                        historical_df=filtered_df
+                    )
+                    st.pyplot(fig)
+                
+                # Display forecast data
+                st.subheader("Forecast Data")
+                display_cols = ['ds', 'yhat', 'yhat_lower', 'yhat_upper']
+                if 'trend' in forecast.columns:
+                    display_cols.append('trend')
+                
+                forecast_display = forecast[display_cols].copy()
+                forecast_display = forecast_display.rename(columns={
+                    'ds': 'Date',
+                    'yhat': 'Forecast',
+                    'yhat_lower': 'Lower Bound (95%)',
+                    'yhat_upper': 'Upper Bound (95%)',
+                    'trend': 'Trend'
+                })
+                st.dataframe(forecast_display)
+                
+                # Create scenarios
+                st.subheader("Forecast Scenarios")
+                st.write("Compare different demand scenarios")
+                
+                scenarios = {
+                    "Base Forecast": forecast,
+                    "High Demand (+20%)": create_forecast_scenario(forecast, "High Demand", 1.2),
+                    "Low Demand (-20%)": create_forecast_scenario(forecast, "Low Demand", 0.8)
+                }
+                
+                # Plot scenario comparison
+                fig = compare_forecast_scenarios(scenarios, filtered_df)
+                st.pyplot(fig)
+                
+                # Download forecast as CSV
+                st.download_button(
+                    label="Download Forecast CSV",
+                    data=forecast_display.to_csv(index=False),
+                    file_name=f"electricity_demand_forecast_{forecast_start_dt.strftime('%Y-%m-%d')}.csv",
+                    mime="text/csv",
+                    key="download_forecast"
+                )
+                
+            except Exception as e:
+                st.error(f"Error generating forecast: {e}")
+                st.error("Stack trace:")
+                st.exception(e)
+    
+    # Information about forecasting
+    with st.expander("About Forecasting Methods"):
+        st.markdown("""
+        ### Statistical Forecasting (Prophet)
+        Facebook Prophet is a forecasting procedure that works best with time series that have strong seasonal effects and several seasons of historical data. Prophet is robust to missing data and trend changes, and typically handles outliers well.
+        
+        ### Machine Learning Forecasting
+        The ML-based forecasting uses the same models from the Model Performance tab but applied to future data points. The models capture relationships between features like temperature, hour of day, day of week, etc. to predict future electricity demand.
+        
+        ### Temperature Scenarios
+        - **Normal**: Uses typical temperature patterns based on historical data.
+        - **High**: Simulates a hotter than normal scenario.
+        - **Low**: Simulates a cooler than normal scenario.
+        - **Custom**: Allows you to manually set temperature parameters.
+        """)        
         
 # Footer with additional information
 st.markdown("---")

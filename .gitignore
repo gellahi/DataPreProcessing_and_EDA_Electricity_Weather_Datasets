@@ -1,0 +1,3 @@
+# Ignore raw data folders
+electricity_raw_data/
+weather_raw_data/

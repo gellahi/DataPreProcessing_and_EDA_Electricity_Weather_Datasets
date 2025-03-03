@@ -324,3 +324,11 @@ def detect_and_handle_outliers(df, column='electricity_demand'):
     cleaned_df = detector.handle_outliers('iqr', column=column, strategy='cap')
     
     return detector, cleaned_df, summary
+
+def handle_outliers(df, column='electricity_demand'):
+    """
+    Legacy function for backward compatibility with main.py
+    Just calls detect_and_handle_outliers and returns the cleaned dataframe
+    """
+    _, cleaned_df, _ = detect_and_handle_outliers(df, column)
+    return cleaned_df
